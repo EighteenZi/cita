@@ -54,6 +54,7 @@ extern crate cita_secp256k1;
 extern crate test;
 #[cfg(test)]
 extern crate cita_crypto;
+extern crate ethabi;
 
 pub mod state;
 pub mod account_db;
@@ -84,6 +85,7 @@ pub mod native;
 
 pub mod libchain;
 pub mod filters;
+pub mod contracts;
 
 pub use factory::*;
 pub use types::*;
