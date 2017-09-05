@@ -65,12 +65,10 @@ impl ZcPermission {
         };
         contract.functions.insert(0, Box::new(ZcPermission::apply_group));
         contract.functions.insert(1, Box::new(ZcPermission::verify_group));
-//        contract.functions.insert(2, Box::new(ZcPermission::query_group));
-//        contract.functions.insert(3, Box::new(ZcPermission::query_role));
-//        contract.functions.insert(4, Box::new(ZcPermission::grant_role));
-//        contract.functions.insert(5, Box::new(ZcPermission::revoke_role));
-//        contract.functions.insert(6, Box::new(ZcPermission::quit_group));
-//        contract.functions.insert(7, Box::new(ZcPermission::check_user_in));
+        contract.functions.insert(2, Box::new(ZcPermission::query_group));
+        contract.functions.insert(3, Box::new(ZcPermission::grant_role));
+        contract.functions.insert(4, Box::new(ZcPermission::revoke_role));
+        contract.functions.insert(5, Box::new(ZcPermission::quit_group));
         contract
     }
 
@@ -94,39 +92,55 @@ impl ZcPermission {
     }
 
     // check_user_in(group);
-    pub fn check_user_in(params: &ActionParams, ext: &mut Ext) -> bool {
-        // TODO：后面用storage_at获取变量值，删除下面contract
-        // undo: check the permission
-        let mut contract = ZcPermission {
-            functions: HashMap::<Signature, Box<Function>>::new(),
-            creator: vec![],
-            sender: vec![],
-            applicant_of_creator: vec![],
-            applicant_of_sender: vec![],
-            groups: HashMap::<String, Vec<String>>::new(),
-            roles: HashMap::<String, Vec<String>>::new(),
-        };
-        let groups = contract.groups;
-
-        let user = params.clone().sender.to_hex();
-        let data = params.clone().data.unwrap_or("error".as_bytes().to_owned());
-        // TODO unwrap()
-        let gr = String::from_utf8(data.get(4..36).unwrap().to_vec()).unwrap();
-        match groups.get(&user) {
-            Some(group) => {
-                let ug = group.clone();
-                if ug.contains(&gr) {
+    pub fn check_user_in(user: &String, group: &String) -> bool {
+        // TODO replace
+        let user_groups = HashMap::<String, Vec<String>> ::new();
+        match user_groups.get(user) {
+            Some(groups) => {
+                if groups.contains(group) {
                     return true;
                 }
                 else {
                     return false;
                 }
-                //                let ret_code = ZcPermission::to_u8(ug).as_bytes();
-                //                Ok(GasLeft::NeedsReturn(U256::from(0), ret_code))
             },
             None => { return false; }
         }
-//        Ok(GasLeft::Known(U256::from(0)))
+    }
+
+    pub fn into_temp(&mut self, group: &[u8], user: String) -> bool {
+        match str::from_utf8(group).unwrap() {
+            "sender" => {
+                self.applicant_of_sender.push(user);
+                true
+            },
+            "creator" => {
+                self.applicant_of_creator.push(user);
+                false
+            },
+            _ => false,
+        }
+    }
+
+    // verify the into application
+    pub fn into_group(&mut self, group: &[u8]) -> bool {
+        match str::from_utf8(group).unwrap() {
+            "sender" => {
+                // ext.set_storage(H256::from(0), H256::from(data));
+                for user in self.applicant_of_sender.clone() {
+                    self.sender.push(user);
+                }
+                true
+            }
+            "creator" => {
+                // ext.set_storage(H256::from(0), H256::from(data));
+                for user in self.applicant_of_creator.clone() {
+                    self.creator.push(user);
+                }
+                true
+            },
+            _ => false,
+        }
     }
 
     // apply to into/quit the group
@@ -144,7 +158,9 @@ impl ZcPermission {
 
         let user = params.sender.to_hex();
         if let Some(ref data) = params.data {
-            ZcPermission::into_temp(data.get(4..36).unwrap(), ext, &mut contract, user);
+            contract.into_temp(data.get(4..36).unwrap(), user);
+        } else {
+            return Err(Error::Internal("wrong data".to_string()));
         }
         Ok(GasLeft::Known(U256::from(0)))
     }
@@ -152,7 +168,7 @@ impl ZcPermission {
     // verify the application
     // fn verify_group(group: &string);
     pub fn verify_group(params: &ActionParams, ext: &mut Ext) -> evm::Result<GasLeft<'static>> {
-        // TODO：后面用storage_at获取变量值，删除下面contract
+        // TODO：replace
         // undo: check the permission
         let mut contract = ZcPermission {
             functions: HashMap::<Signature, Box<Function>>::new(),
@@ -164,76 +180,76 @@ impl ZcPermission {
             roles: HashMap::<String, Vec<String>>::new(),
         };
 
+        let sender = params.sender.to_hex();
+
         if let Some(ref data) = params.data {
+            let group = data.get(4..36).unwrap();
+            if !(ZcPermission::check_user_in(&sender, &String::from_utf8(group.to_vec()).unwrap())) {
+                return Err(Error::Internal("The sender has no permission".to_string()));
+            }
             // let _ = ext.set_storage(H256::from(0), H256::from(data));
-            ZcPermission::into_group(data.get(4..36).unwrap(), ext, &mut contract);
+            contract.into_group(group);
+        } else {
+            return Err(Error::Internal("wrong data".to_string()));
         }
         Ok(GasLeft::Known(U256::from(0)))
     }
 
     // query the permission
     pub fn query_group(params: & ActionParams, ext: &mut Ext) -> evm::Result<GasLeft<'static>> {
-        // TODO：后面用storage_at获取变量值，删除下面contract
-        // undo: check the permission
-        let mut contract = ZcPermission {
-            functions: HashMap::<Signature, Box<Function>>::new(),
-            creator: vec![],
-            sender: vec![],
-            applicant_of_creator: vec![],
-            applicant_of_sender: vec![],
-            groups: HashMap::<String, Vec<String>>::new(),
-            roles: HashMap::<String, Vec<String>>::new(),
-        };
-        let groups = contract.groups;
+        // TODO：replace
+        if let Some(ref data) = params.data {
+            let user = params.sender.to_hex();
 
-        let user = params.sender.to_hex();
-        match groups.get(&user) {
-            Some(group) => {
-                let ug = group.clone();
-//                let ret_code = ZcPermission::to_u8(ug).as_bytes();
-//                Ok(GasLeft::NeedsReturn(U256::from(0), ret_code))
-            },
-            None => {}
+            if let Some(ref data) = params.data {
+                let param_group = data.get(4..36).unwrap();
+                if ZcPermission::check_user_in(&user, &String::from_utf8(param_group.to_vec()).unwrap()) {
+                    return Ok(GasLeft::Known(U256::from(0)));
+                }
+                return Err(Error::Internal("no permission".to_string()));
+            } else {
+                return Err(Error::Internal("wrong data".to_string()));
+            }
         }
         Ok(GasLeft::Known(U256::from(0)))
     }
 
 
-    // query the role of the group
-    // fn query_role(group: String) -> Vec<String>
-    pub fn query_role(params: &ActionParams, ext: &mut Ext) -> evm::Result<GasLeft<'static>> {
-        // TODO：后面用storage_at获取变量值，删除下面contract
-        // undo: check the permission
-        let mut contract = ZcPermission {
-            functions: HashMap::<Signature, Box<Function>>::new(),
-            creator: vec![],
-            sender: vec![],
-            applicant_of_creator: vec![],
-            applicant_of_sender: vec![],
-            groups: HashMap::<String, Vec<String>>::new(),
-            roles: HashMap::<String, Vec<String>>::new(),
-        };
-        let roles = contract.roles;
-
-        if let Some(ref data) = params.data {
-            let group = data.get(4..36).unwrap();
-            match roles.get(&String::from_utf8(group.to_vec()).unwrap()) {
-                Some(role) => {
-                    let group_role = role.clone();
-//                    let ret_code = ZcPermission::to_u8(group_role).as_bytes();
-//                    Ok(GasLeft::NeedsReturn(U256::from(0), ret_code))
-                    Ok(GasLeft::Known(U256::from(0)))
-                },
-                None => Ok(GasLeft::Known(U256::from(0)))
-            }
-        } else {
-            Ok(GasLeft::Known(U256::from(0)))
-        }
-    }
+//    // query the role of the group
+//    // fn query_role(group: String) -> Vec<String>
+//    pub fn query_role(params: &ActionParams, ext: &mut Ext) -> evm::Result<GasLeft<'static>> {
+//        // TODO：后面用storage_at获取变量值，删除下面contract
+//        // undo: check the permission
+//        let mut contract = ZcPermission {
+//            functions: HashMap::<Signature, Box<Function>>::new(),
+//            creator: vec![],
+//            sender: vec![],
+//            applicant_of_creator: vec![],
+//            applicant_of_sender: vec![],
+//            groups: HashMap::<String, Vec<String>>::new(),
+//            roles: HashMap::<String, Vec<String>>::new(),
+//        };
+//        let roles = contract.roles;
+//
+//        if let Some(ref data) = params.data {
+//            let group = data.get(4..36).unwrap();
+//            match roles.get(&String::from_utf8(group.to_vec()).unwrap()) {
+//                Some(role) => {
+//                    let group_role = role.clone();
+////                    let ret_code = ZcPermission::to_u8(group_role).as_bytes();
+////                    Ok(GasLeft::NeedsReturn(U256::from(0), ret_code))
+//                    Ok(GasLeft::Known(U256::from(0)))
+//                },
+//                None => Ok(GasLeft::Known(U256::from(0)))
+//            }
+//        } else {
+//            Ok(GasLeft::Known(U256::from(0)))
+//        }
+//    }
 
     // grant the role to a user
     // fn grant_role(group: &String, role: &Role, user: &String) -> bool
-    pub fn grant_role(params: &ActionParams, ext: &mut Ext) -> bool {
+    pub fn grant_role(params: &ActionParams, ext: &mut Ext) -> evm::Result<GasLeft<'static>> {
         // TODO：后面用storage_at获取变量值，删除下面contract
         let mut contract = ZcPermission {
             functions: HashMap::<Signature, Box<Function>>::new(),
@@ -247,31 +263,53 @@ impl ZcPermission {
         let mut groups = contract.groups;
         let roles = contract.roles;
 
+        let sender = params.sender.to_hex();
         if let Some(ref data) = params.data {
+            // TODO 判断数据传入不对的情况
             let param_group = data.get(4..36).unwrap();
             let param_role = data.get(36..68).unwrap();
             let param_user = data.get(68..100).unwrap();
 
+            if !(ZcPermission::check_user_in(&sender, &String::from_utf8(param_group.to_vec()).unwrap())) {
+                return Err(Error::Internal("The sender has no permission".to_string()));
+            }
+
             match roles.get(&String::from_utf8(param_group.to_vec()).unwrap()) {
-                Some(mut role) => {
-                    if !role.contains(&String::from_utf8(param_role.to_vec()).unwrap()) {
-                        return false;
+                Some(_role) => {
+                    let mut role = _role.clone();
+                    if !(role.contains(&String::from_utf8(param_role.to_vec()).unwrap())) {
+                        role.push(String::from_utf8(param_role.to_vec()).unwrap());
                     }
                 },
-                None => { return false; },
+                None => {
+                    return Err(Error::Internal("The group has no role".to_string()));
+                },
             };
 
-            match groups.get_mut(&String::from_utf8(param_user.to_vec()).unwrap()) {
-                Some(group) => group.push(String::from_utf8(param_group.to_vec()).unwrap()),
-                None => { return false; },
-            };
+            if !(ZcPermission::check_user_in(&String::from_utf8(param_user.to_vec()).unwrap(),
+                                            &String::from_utf8(param_group.to_vec()).unwrap())) {
+                return Err(Error::Internal("The user was already in the group which has the role".to_string()));
+            } else {
+                    match groups.get_mut(&String::from_utf8(param_user.to_vec()).unwrap()) {
+                        Some(group) => {
+                            if !(group.contains(&String::from_utf8(param_group.to_vec()).unwrap())) {
+                                group.push(String::from_utf8(param_group.to_vec()).unwrap());
+                            }
+                        },
+                        None => {
+                            return Err(Error::Internal("The user has no group".to_string()));
+                        },
+                };
+            }
+        } else {
+            return Err(Error::Internal("wrong data".to_string()));
         }
-        true
+        Ok(GasLeft::Known(U256::from(0)))
     }
 
     // revoke the role to a user
     // fn revoke_role(group: &String, role: &Role, user: &String) -> bool;
-    pub fn revoke_role(params: &ActionParams, ext: &mut Ext) -> bool {
+    pub fn revoke_role(params: &ActionParams, ext: &mut Ext) -> evm::Result<GasLeft<'static>> {
         // TODO：后面用storage_at获取变量值，删除下面contract
         let mut contract = ZcPermission {
             functions: HashMap::<Signature, Box<Function>>::new(),
@@ -285,36 +323,45 @@ impl ZcPermission {
         let mut groups = contract.groups;
         let roles = contract.roles;
 
+        let sender = params.sender.to_hex();
         if let Some(ref data) = params.data {
             let param_group = data.get(4..36).unwrap();
             let param_role = data.get(36..68).unwrap();
             let param_user = data.get(68..100).unwrap();
 
+            if !(ZcPermission::check_user_in(&sender, &String::from_utf8(param_group.to_vec()).unwrap())) {
+                return Err(Error::Internal("The sender has no permission".to_string()));
+            }
+
             match roles.get(&String::from_utf8(param_group.to_vec()).unwrap()) {
                 Some(mut role) => {
                     if !role.contains(&String::from_utf8(param_role.to_vec()).unwrap()) {
-                        return false;
+                        return Err(Error::Internal("".to_string()));
                     }
                 },
-                None => { return false; }
+                None => { return Err(Error::Internal("".to_string())); }
             }
 
             match groups.get_mut(&String::from_utf8(param_user.to_vec()).unwrap()) {
                 Some(group) => {
                     match group.remove_item(&String::from_utf8(param_user.to_vec()).unwrap()) {
-                        Some(user) => { return true; },
-                        None => { return false; }
+                        Some(user) => {},
+                        None => { return Err(Error::Internal("".to_string())); }
                     }
                 },
-                None => { return false; }
+                None => {
+                    return Err(Error::Internal("".to_string()));
+                }
             }
+        } else {
+            return Err(Error::Internal("wrong data".to_string()));
         }
-        true
+        Ok(GasLeft::Known(U256::from(0)))
     }
 
     // quit the group
     // fn quit_group(group: &String) -> bool;
-    pub fn quit_group(params: &ActionParams, ext: &mut Ext) -> bool {
+    pub fn quit_group(params: &ActionParams, ext: &mut Ext) -> evm::Result<GasLeft<'static>> {
         // TODO：后面用storage_at获取变量值，删除下面contract
         let mut contract = ZcPermission {
             functions: HashMap::<Signature, Box<Function>>::new(),
@@ -327,66 +374,39 @@ impl ZcPermission {
         };
         let mut groups = contract.groups;
 
-        let user = params.sender.to_hex();
+        let sender = params.sender.to_hex();
         if let Some(ref data) = params.data {
             let param_group = data.get(4..36).unwrap();
-            match groups.get_mut(&user) {
+
+            if !(ZcPermission::check_user_in(&sender, &String::from_utf8(param_group.to_vec()).unwrap())) {
+                return Err(Error::Internal("The sender doesn't in the group".to_string()));
+            }
+
+            match groups.get_mut(&sender) {
                 Some(vec_group) => {
                     match vec_group.remove_item(&String::from_utf8(param_group.to_vec()).unwrap()) {
-                        Some(group) => { return true; },
-                        None => { return false; }
+                        Some(group) => {},
+                        None => { return Err(Error::Internal("".to_string())); }
                     }
                 }
-                None => { return false; }
+                None => { return Err(Error::Internal("".to_string())); }
             }
+        } else {
+            return Err(Error::Internal("wrong data".to_string()));
         }
-        true
+        Ok(GasLeft::Known(U256::from(0)))
     }
 
 
-    pub fn into_temp(group: &[u8], ext: &mut Ext, contract: &mut ZcPermission, user: String) -> bool {
-        match str::from_utf8(group).unwrap() {
-            "sender" => {
-                contract.applicant_of_sender.push(user);
-                true
-            },
-            "creator" => {
-                contract.applicant_of_creator.push(user);
-                false
-            },
-            _ => false,
-        }
-    }
 
-    // verify the into application
-    pub fn into_group(group: &[u8], ext: &mut Ext, contract: &mut ZcPermission) -> bool {
-        match str::from_utf8(group).unwrap() {
-            "sender" => {
-                // ext.set_storage(H256::from(0), H256::from(data));
-                for user in contract.applicant_of_sender.clone() {
-                    contract.sender.push(user);
-                }
-                true
-            }
-            "creator" => {
-                // ext.set_storage(H256::from(0), H256::from(data));
-                for user in contract.applicant_of_creator.clone() {
-                    contract.creator.push(user);
-                }
-                true
-            },
-            _ => false,
-        }
-    }
-
-    // convert Vec<String> to &[u8], every string followed by a blank
-    pub fn to_u8(groups: Vec<String>) -> String {
-        let mut res = String::new();
-        let ug = groups.clone();
-        for gr in ug {
-            res.push_str(&gr);
-            res.push_str(" ");
-        }
-        res
-    }
+//    // convert Vec<String> to &[u8], every string followed by a blank
+//    pub fn to_u8(groups: Vec<String>) -> String {
+//        let mut res = String::new();
+//        let ug = groups.clone();
+//        for gr in ug {
+//            res.push_str(&gr);
+//            res.push_str(" ");
+//        }
+//        res
+//    }
 }
