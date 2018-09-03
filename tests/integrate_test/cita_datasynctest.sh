@@ -7,7 +7,7 @@ stop_node3() {
 
 start_node3() {
     cd ${CUR_PATH}/../../admintool/release/node3
-    ./cita start 3
+    ./cita start 3 &
 }
 
 get_height(){
@@ -15,7 +15,7 @@ get_height(){
     if [ ! -n "$nodeid" ]; then
         nodeid=0
     fi
-    h=`${CUR_PATH}/cita_blockNumber.sh 127.0.0.1 $((1337+${nodeid}))`
+    h=`${CUR_PATH}/blockNumber.sh 127.0.0.1 $((1337+${nodeid}))`
     h=$(echo $h | sed 's/\"//g')
     echo $((h))    
 }

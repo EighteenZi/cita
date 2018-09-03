@@ -1,84 +1,55 @@
-#usage: start demo nodes
-#       ./cita_start.sh 
-#       ./cita_start.sh tendermint debug
 #!/bin/bash
+#usage: start demo nodes
+#       ./cita_start.sh
+#       ./cita_start.sh [error,info, warn, debug, trace] [cita-bft]
+
 set +e
-consensus=$1
-debug=$2
-if [ ! -n "$consensus" ]; then
-    consensus="tendermint"
+
+debug=$1
+consensus=$2
+
+if [[ `uname` == 'Darwin' ]]
+then
+    SOURCE_DIR=$(realpath $(dirname $0)/../..)
+else
+    SOURCE_DIR=$(readlink -f $(dirname $0)/../..)
 fi
-CUR_PATH=$(cd `dirname $0`; pwd)
-cd ${CUR_PATH}/../../admintool/
-./setup.sh
-./admintool.sh -n $consensus
+BINARY_DIR=${SOURCE_DIR}/target/install
+. ${SOURCE_DIR}/tests/integrate_test/util.sh
 
-setup_node() {
-    id=$1
-    cd ${CUR_PATH}/../../admintool/release/node${id}
-    ./cita setup ${id}
-}
+if [ ! -n "$consensus" ]; then
+    consensus="cita-bft"
+fi
 
-start_node() {
-    id=$1
-    cd ${CUR_PATH}/../../admintool/release/node${id}
-    ./cita start ${id} ${debug}
-}
+echo "###cleanup"
+cleanup
 
-stop_node() {
-    id=$1
-    cd ${CUR_PATH}/../../admintool/release/node${id}
-    ./cita stop ${id}
-}
+echo "###generate config files"
+cd ${BINARY_DIR}
+./scripts/create_cita_config.py create \
+    --chain_name "node" \
+    --nodes "127.0.0.1:4000,127.0.0.1:4001,127.0.0.1:4002,127.0.0.1:4003" >/dev/null 2>&1
 
-stop_all () {
-    stop_node 0
-    stop_node 1
-    stop_node 2
-    stop_node 3
-}
 
-start_all () {
-    start_node 0
-    start_node 1
-    start_node 2
-    start_node 3
-}
+echo "###start nodes"
+for i in {0..3} ; do
+    setup_node $i
+done
 
-get_height(){
-    nodeid=$1
-    if [ ! -n "$nodeid" ]; then
-        nodeid=0
-    fi
-    h=`${CUR_PATH}/cita_blockNumber.sh 127.0.0.1 $((1337+${nodeid}))`
-    h=$(echo $h | sed 's/\"//g')
-    echo $((h))    
-}
+for i in {0..3} ; do
+    start_node $i &
+done
 
-check_height_change () {
-    echo "check block height"
-    old_height=$(get_height)
-    echo "block height $old_height"
-    sleep 30
-    new_height=$(get_height)
-    echo "block height $new_height"
-    if [ $new_height -eq $old_height ]; then
-        stop_all
-        exit 1
-    fi
-}
-
-echo "###start nodes..."
-(setup_node 0;start_node 0) &
-(setup_node 1;start_node 1) &
-(setup_node 2;start_node 2) &
-(setup_node 3;start_node 3) &
-echo `date`
-echo "###wait for start..."
-sleep 120
-echo `date`
-check_height_change
-
+echo -n "###check height growth"
+msg=$(check_height_growth 0 60)|| (echo "FAILED"
+                                echo "check height growth: ${msg}"
+                                exit 1)
 echo "###CITA start OK"
-exit 0
+
+cita_pid=`cat ${BINARY_DIR}/node/0/.cita-forever.pid`
+pid_file="/proc/${cita_pid}/cmdline"
+
+while [ -e ${pid_file} ];do
+    sleep 3;
+done
 

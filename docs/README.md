@@ -1,22 +1,26 @@
-### 安装
+# CITA Documentation
 
-项目使用[Sphinx](http://sphinx-doc.org/) 来构建文档。在已经安装[Python](https://www.python.org/)的基础上，安装[Sphinx](http://sphinx-doc.org/latest/install.html):
+### Visit the documentation site: [https://cryptape.github.io/cita](https://cryptape.github.io/cita)
 
-```shell
-$ pip install sphinx sphinx-autobuild
-$ pip install sphinx_rtd_theme
-```
+### Build the documentation site
 
-### 约定
+* Install docsify-cli globally, which helps initializing and previewing the website locally. 
 
-* 文档源文件以RST格式保存在`docs/source`目录下。
-* 文档主目录是 index.rst，增加新文档文件需要更新主目录文件。
+  ```shell
+  $ npm i docsify-cli -g
+  ```
+  > **Note**
+  > 
+  > You can also install docsify-cli by Yarn:
+  >
+  > ```shell
+  > $ yarn global add docsify-cli
+  > ```
+  > If you have not use Yarn before, you'll first need to install it on your system. Please refer to [official installation documents](https://yarnpkg.com/lang/en/docs/install/).
 
-### 构建
+* Use the `docsify serve` command to view the site on localhost `http://localhost:3000`, and real-time reload whenever the you save changes.
 
-每次更新文档需要重新构建html文档
-
-```shell
-make html
-```
-
+  ```shell
+  $ cd docs
+  $ docsify serve
+  ```

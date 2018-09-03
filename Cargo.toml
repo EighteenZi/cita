@@ -1,20 +1,24 @@
 [workspace]
-members = ["devtools"
-,"auth"
-,"jsonrpc"
-,"chain"
-,"chain/core"
-,"chain/types"
-,"consensus/tdmint"
-,"consensus/txpool"
-,"consensus/raft"
-,"consensus/authority_round"
-,"network"
-,"admintool/create_key_addr"
-,"tests/trans_evm"
-,"tests/chain_performance"
-,"tests/amqp"
-,"tests/latency"
+members = ["cita-auth"
+,"cita-jsonrpc"
+,"cita-chain"
+,"cita-bft"
+,"cita-network"
+,"cita-executor"
+,"cita-forever"
+,"tools/create_key_addr"
+,"tools/snapshot_tool"
+,"tools/relayer-parser"
+,"tests/chain-executor-mock"
+,"tests/consensus-mock"
+,"tests/chain_performance_by_mq"
 ]
 
-
+[profile.bench]
+opt-level = 3
+debug = false
+rpath = false
+lto = false
+debug-assertions = false
+codegen-units = 1
+panic = 'unwind'

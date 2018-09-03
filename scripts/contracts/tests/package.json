@@ -1,0 +1,42 @@
+{
+  "name": "contract-test",
+  "version": "0.1.0",
+  "description": "CITA contract test using web3",
+  "main": "",
+  "devDependencies": {
+    "eslint": "^4.19.1",
+    "eslint-config-airbnb-base": "^12.1.0",
+    "eslint-plugin-import": "^2.12.0"
+  },
+  "scripts": {
+    "unit_group": "mocha test/unit/group.js -t 60s; eslint test/unit/group.js",
+    "unit_permission": "mocha test/unit/permission.js  -t 60s; eslint test/unit/permission.js",
+    "unit_gm": "mocha test/unit/group_management.js -t 60s; eslint test/unit/group_management.js",
+    "unit_pm": "mocha test/unit/permission_management.js -t 60s; eslint test/unit/permission_management.js",
+    "unit_rm": "mocha test/unit/role_management.js -t 60s; eslint test/unit/role_management.js",
+    "unit_auth": "mocha test/unit/authorization.js -t 60s; eslint test/unit/authorization.js",
+    "unit_quota": "mocha test/unit/quota.js -t 60s; eslint test/unit/quota.js",
+    "unit_qm": "mocha test/unit/quota_manager.js -t 60s; eslint test/unit/quota_manager.js",
+    "unit_node": "mocha test/unit/node_manager.js -t 60s; eslint test/unit/node_manager.js",
+    "unit_chain": "mocha test/unit/chain_manager.js -t 60s; eslint test/unit/chain_manager.js",
+    "unit_admin": "mocha test/unit/admin.js -t 60s; eslint test/unit/admin.js",
+    "uint8": "mocha test/unit/uint8.js -t 60s; eslint test/unit/uint8.js",
+    "integrate_quota": "mocha test/integrate/quota -t 60s; eslint test/integrate/quota.js",
+    "abi": "mocha test/integrate/abi.js -t 60s; eslint test/integrate/abi.js",
+    "store": "mocha test/integrate/store.js -t 60s; eslint test/integrate/store.js",
+    "batch_tx": "mocha test/integrate/batch_tx.js -t 60s; eslint test/integrate/batch_tx.js",
+    "permission": "mocha test/integrate/permission.js -t 60s; eslint test/integrate/permission.js",
+    "lint": "eslint test",
+    "lint-fix": "eslint --fix test"
+  },
+  "repository": {},
+  "author": "Cryptape Technologies <contact@cryptape.com>",
+  "license": "GPL-3.0+",
+  "dependencies": {
+    "@nervos/web3": "^0.17.32",
+    "chai": "^4.1.2",
+    "log4js": "^2.7.0",
+    "mocha": "^5.2.0",
+    "web3": "^1.0.0-beta.34"
+  }
+}

@@ -1,185 +1,126 @@
 #!/bin/bash
-set +e
-CUR_PATH=$(cd `dirname $0`; pwd)
-cd ${CUR_PATH}/../../admintool/
-./admintool.sh
+set -e
 
-setup_node() {
-    id=$1
-    cd ${CUR_PATH}/../../admintool/release/node${id}
-    ./cita setup ${id}
-}
+if [[ `uname` == 'Darwin' ]]
+then
+    SOURCE_DIR=$(realpath $(dirname $0)/../..)
+else
+    SOURCE_DIR=$(readlink -f $(dirname $0)/../..)
+fi
+BINARY_DIR=${SOURCE_DIR}/target/install
 
-start_node() {
-    id=$1
-    cd ${CUR_PATH}/../../admintool/release/node${id}
-    ./cita start ${id} debug
-}
+################################################################################
+echo -n "0) prepare  ...  "
+. ${SOURCE_DIR}/tests/integrate_test/util.sh
+cd ${BINARY_DIR}
+echo "DONE"
 
-stop_node() {
-    id=$1
-    cd ${CUR_PATH}/../../admintool/release/node${id}
-    ./cita stop ${id}
-}
+################################################################################
+echo -n "1) cleanup   ...  "
+cleanup
+echo "DONE"
 
-stop_all () {
-    stop_node 0
-    stop_node 1
-    stop_node 2
-    stop_node 3
-}
+################################################################################
+echo -n "2) generate config  ...  "
+./scripts/create_cita_config.py create \
+    --chain_name "node" \
+    --nodes "127.0.0.1:4000,127.0.0.1:4001,127.0.0.1:4002,127.0.0.1:4003" \
+    > /dev/null 2>&1
+echo "DONE"
 
-start_all () {
-    start_node 0
-    start_node 1
-    start_node 2
-    start_node 3
-}
+################################################################################
+echo -n "3) start nodes  ...  "
+for i in {0..3} ; do
+    bin/cita setup node/$i  > /dev/null
+done
+for i in {0..3} ; do
+    bin/cita start node/$i trace > /dev/null &
+done
+echo "DONE"
 
-get_height(){
-    nodeid=$1
-    if [ ! -n "$nodeid" ]; then
-        nodeid=0
-    fi
-    h=`${CUR_PATH}/cita_blockNumber.sh 127.0.0.1 $((1337+${nodeid}))`
-    h=$(echo $h | sed 's/\"//g')
-    echo $((h))    
-}
+################################################################################
+echo -n "4) check height growth normal  ...  "
+timeout=$(check_height_growth_normal 0 60)||(echo "FAILED"
+                                            echo "check_height_growth_normal: ${timeout}"
+                                            exit 1)
+echo "${timeout}s DONE"
 
-check_height_change () {
-    echo "check block height"
-    old_height=$(get_height)
-    echo "block height $old_height"
-    sleep 30
-    new_height=$(get_height)
-    echo "block height $new_height"
-    if [ $new_height -eq $old_height ]; then
-        stop_all
-        exit 1
-    fi
-}
+################################################################################
+echo -n "5) stop node3, check height growth  ...  "
+bin/cita stop node/3
+timeout=$(check_height_growth_normal 0 60) || (echo "FAILED"
+                                               echo "failed to check_height_growth 0: ${timeout}"
+                                               exit 1)
+echo "${timeout}s DONE"
 
-check_height_stop () {
-    echo "check block height"
-    old_height=$(get_height)
-    echo "block height $old_height"
-    sleep 30
-    new_height=$(get_height)
-    echo "block height $new_height"
-    if [ $new_height -ne $old_height ]; then
-        stop_all
-        exit 1
-    fi
-}
+################################################################################
+echo -n "6) stop node2, check height stopped  ...  "
+bin/cita stop node/2
+timeout=$(check_height_stopped 0 30) || (echo "FAILED"
+                                         echo "failed to check_height_stopped 0: ${timeout}"
+                                         exit 1)
+echo "${timeout}s DONE"
 
-create_contract() {
-    cd ${CUR_PATH}/../wrk_benchmark_test/
-    echo "create contract"
-    ./benchmark.sh
-    if [ $? -ne 0 ]
-    then  
-        exit
-    fi
-}
+################################################################################
+echo -n "7) start node2, check height growth  ...  "
+bin/cita start node/2 trace &
+timeout=$(check_height_growth_normal 0 60) || (echo "FAILED"
+                                               echo "failed to check_height_growth 0: ${timeout}"
+                                               exit 1)
+echo "${timeout}s DONE"
 
-send_tx() {
-    cd ${CUR_PATH}/../wrk_benchmark_test/
-    while [ 0 -le 1 ]
-    do
-        echo "call contract"
-        ./benchmark.sh config_call.json >/dev/null
-        if [ $? -ne 0 ]
-        then  
-            exit
-        fi
-        sleep 5
-    done
-}
+################################################################################
+echo -n "8) start node3, check synch  ...  "
+node0_height=$(get_height 0)
 
-echo "###start nodes..."
-(setup_node 0;start_node 0) &
-(setup_node 1;start_node 1) &
-(setup_node 2;start_node 2) &
-(setup_node 3;start_node 3) &
-echo `date`
-echo "###wait for start..."
-sleep 120
-echo `date`
-check_height_change
-create_contract
-(send_tx)&
-pid=$!
+if [ $? -ne 0 ] ; then
+    echo "failed to get_height: ${node0_height}"
+    exit 1
+fi
+bin/cita start node/3 trace &
+timeout=$(check_height_sync 3 0) || (echo "FAILED"
+                                     echo "failed to check_height_synch 3 0: ${timeout}"
+                                     exit 1)
+echo "${timeout}s DONE"
 
-echo "###stop node3..."
-stop_node 3
-check_height_change
+################################################################################
+echo -n "9) stop all nodes, check height changed after restart  ...  "
+before_height=$(get_height 0)
+if [ $? -ne 0 ] ; then
+    echo "failed to get_height: ${before_height}"
+    exit 1
+fi
+for i in {0..3}; do
+    bin/cita stop node/$i
+done
+# sleep 1 # TODO: change to this value will produce very different result
+for i in {0..3}; do
+    bin/cita start node/$i trace &
+done
 
-echo "###stop node2..."
-stop_node 2
-check_height_stop
-
-echo "###start node2..."
-start_node 2
-before_height=$(get_height)
-#recover too slow
-sleep 420
-after_height=$(get_height)
-echo "node2 recover block height $after_height"
+timeout=$(check_height_growth_normal 0 300) || (echo "FAILED"
+                                               echo "failed to check_height_growth 0: ${timeout}"
+                                               exit 1)
+after_height=$(get_height 0)|| (echo "failed to get_height: ${after_height}"
+                                exit 1)
 if [ $after_height -le $before_height ]; then
-    stop_all
+    echo "FAILED"
+    echo "before:${before_height} after:${after_height}"
     exit 1
 fi
+echo "${timeout}s DONE"
 
-echo "###start node3...check sync"
-node0_height=$(get_height)
-echo "node0 block height $node0_height"
-start_node 3
-sleep 3
-befor_sync_height=$(get_height 3)
-echo "node3 block height before sync $befor_sync_height"
-sleep 60
-after_sync_height=$(get_height 3)
-echo "node3 block height after sync $after_sync_height"
-if [ $after_sync_height -le $befor_sync_height ]; then
-    stop_all
-    exit 1
-fi
-echo "wait recover from sync..."
-sleep 420
-check_height_change
+################################################################################
+echo -n "10) stop&clean node3, check height synch after restart  ...  "
+bin/cita stop node/3
+bin/cita clean node/3
+bin/cita start node/3 trace &
+timeout=$(check_height_sync 3 0) || (echo "FAILED"
+                                     echo "failed to check_height_synch 3 0: ${timeout}"
+                                     exit 1)
+echo "${timeout}s DONE"
 
-echo "###stop all node...check for restart"
-before_height=$(get_height)
-echo "before restart block height $before_height"
-stop_all
-sleep 3
-start_all
-sleep 60
-after_height=$(get_height)
-echo "after restart block height $after_height"
-if [ $after_height -le $before_height ]; then
-    stop_all
-    exit 1
-fi
-
-
-echo "###node3 clean data then sync"
-stop_node 3
-setup_node 3
-start_node 3
-sleep 300
-check_height_change
-node0_height=$(get_height)
-node3_height=$(get_height 3)
-echo "node0 height $node0_height"
-echo "node3 height $node3_height"
-if [ $node0_height -ne $node3_height ]; then
-    stop_all
-    exit 1
-fi
-
-kill -9 $pid
-stop_all
-echo "###Test OK"
-exit 0
-
+################################################################################
+echo -n "11) cleanup ... "
+cleanup
+echo "DONE"
